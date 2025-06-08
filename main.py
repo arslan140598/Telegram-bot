@@ -1,36 +1,73 @@
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import os
-import requests
 
+# Logging sozlamalari
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+# Muhitdan o'zgaruvchilarni olish
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-bot = telebot.TeleBot(BOT_TOKEN)
+CHANNEL_1 = os.getenv("CHANNEL_1")
+CHANNEL_2 = os.getenv("CHANNEL_2")
+YOUR_CODE = os.getenv("YOUR_CODE")
 
-CHANNELS = ["@your_channel1", "@your_channel2"]  # ← bu yerga o'zingizning kanallaringizni yozing
-USER_CODE = "ABC-1234"  # foydalanuvchiga beriladigan kod
+# Obuna tekshiruvchi funksiya
+async def is_subscribed(user_id, channel, context):
+    try:
+        member = await context.bot.get_chat_member(chat_id=channel, user_id=user_id)
+        return member.status in ['member', 'creator', 'administrator']
+    except:
+        return False
 
-def check_subscription(user_id):
-    for channel in CHANNELS:
-        result = bot.get_chat_member(channel, user_id)
-        if result.status in ['left', 'kicked']:
-            return False
-    return True
+# /start komandasi
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
 
-@bot.message_handler(commands=['start'])
-def start(message):
-    markup = InlineKeyboardMarkup()
-    for ch in CHANNELS:
-        markup.add(InlineKeyboardButton(text=f"➕ {ch}", url=f"https://t.me/{ch[1:]}"))
-    markup.add(InlineKeyboardButton("✅ A'zo bo‘ldim", callback_data="check_subs"))
-    text = "🎉 SALOM BIZNING BOTIMIZGA XUSH KELIBSIZ!\nKod olish uchun quyidagi kanallarga a'zo bo‘ling:"
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    sub1 = await is_subscribed(user.id, CHANNEL_1, context)
+    sub2 = True
+    if CHANNEL_2:
+        sub2 = await is_subscribed(user.id, CHANNEL_2, context)
 
-@bot.callback_query_handler(func=lambda call: call.data == "check_subs")
-def check_subs_callback(call):
-    if check_subscription(call.from_user.id):
-        bot.edit_message_text("✅ Obuna tasdiqlandi!", call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, f"🎁 Sizning kodingiz: `{USER_CODE}`", parse_mode="Markdown")
+    if sub1 and sub2:
+        await update.message.reply_text(f"✅ Tabriklaymiz! Siz ro'yxatdan o'tdingiz.\nSizning kodingiz: `{YOUR_CODE}`", parse_mode='Markdown')
     else:
-        bot.answer_callback_query(call.id, "❗ Iltimos, barcha kanallarga a'zo bo‘ling.")
+        keyboard = [
+            [InlineKeyboardButton("📢 Kanal 1", url=f"https://t.me/{CHANNEL_1.replace('@','')}")],
+        ]
+        if CHANNEL_2:
+            keyboard.append([InlineKeyboardButton("📢 Kanal 2", url=f"https://t.me/{CHANNEL_2.replace('@','')}")])
+        keyboard.append([InlineKeyboardButton("✅ A'zo bo'ldim", callback_data="check_subs")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            "👋 Salom, botimizga xush kelibsiz!\n\nKodni olish uchun quyidagi kanallarga obuna bo'ling:",
+            reply_markup=reply_markup
+        )
 
-bot.infinity_polling()
+# Tugma bosilganda tekshirish
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    sub1 = await is_subscribed(user.id, CHANNEL_1, context)
+    sub2 = True
+    if CHANNEL_2:
+        sub2 = await is_subscribed(user.id, CHANNEL_2, context)
+
+    if sub1 and sub2:
+        await query.edit_message_text(f"✅ Obuna uchun rahmat!\nSizning kodingiz: `{YOUR_CODE}`", parse_mode='Markdown')
+    else:
+        await query.edit_message_text("❌ Obuna bo'lmagansiz. Iltimos, barcha kanallarga obuna bo'ling va yana urinib ko'ring.")
+
+# Botni ishga tushurish
+async def main():
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    await application.run_polling()
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())
