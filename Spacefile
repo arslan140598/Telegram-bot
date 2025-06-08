@@ -1,5 +1,0 @@
-[setup]
-runtime = "python3"
-
-[start]
-cmd = "python3 main.py"
