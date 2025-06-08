@@ -2,14 +2,14 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 import os
 
-TOKEN = os.getenv("BOT_TOKEN")
+API_TOKEN = os.getenv("BOT_TOKEN")
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
 @dp.message_handler(commands=['start'])
-async def welcome(msg: types.Message):
-    await msg.answer("Salom! Men telefon orqali ishlayotgan Telegram botman 😊")
+async def send_welcome(message: types.Message):
+    await message.reply("Salom! Bot muvaffaqiyatli ishlayapti 😊")
 
 if __name__ == '__main__':
-    executor.start_polling(dp)
+    executor.start_polling(dp, skip_updates=True)
